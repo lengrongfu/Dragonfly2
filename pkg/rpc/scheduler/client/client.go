@@ -48,6 +48,7 @@ func GetClientByAddr(addrs []dfnet.NetAddr, opts ...grpc.DialOption) (SchedulerC
 }
 
 // see scheduler.SchedulerClient
+//go:generate mockgen -destination ./mock_scheduler_client.go -package client d7y.io/dragonfly/v2/pkg/rpc/scheduler/client SchedulerClient
 type SchedulerClient interface {
 	RegisterPeerTask(context.Context, *scheduler.PeerTaskRequest, ...grpc.CallOption) (*scheduler.RegisterResult, error)
 	// IsMigrating of ptr will be set to true

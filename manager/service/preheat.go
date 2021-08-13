@@ -1,3 +1,19 @@
+/*
+ *     Copyright 2020 The Dragonfly Authors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package service
 
 import (
@@ -14,13 +30,13 @@ func (s *rest) CreatePreheat(json types.CreatePreheatRequest) (*types.Preheat, e
 
 		scheduler := model.Scheduler{}
 		if err := s.db.First(&scheduler, model.Scheduler{
-			SchedulerClusterID: &schedulerCluster.ID,
+			SchedulerClusterID: schedulerCluster.ID,
 			Status:             model.SchedulerStatusActive,
 		}).Error; err != nil {
 			return nil, err
 		}
 
-		return s.tasks.CreatePreheat([]string{scheduler.HostName}, json)
+		return s.job.CreatePreheat([]string{scheduler.HostName}, json)
 	}
 
 	schedulerClusters := []model.SchedulerCluster{}
@@ -32,7 +48,7 @@ func (s *rest) CreatePreheat(json types.CreatePreheatRequest) (*types.Preheat, e
 	for _, schedulerCluster := range schedulerClusters {
 		scheduler := model.Scheduler{}
 		if err := s.db.First(&scheduler, model.Scheduler{
-			SchedulerClusterID: &schedulerCluster.ID,
+			SchedulerClusterID: schedulerCluster.ID,
 			Status:             model.SchedulerStatusActive,
 		}).Error; err != nil {
 			continue
@@ -41,9 +57,9 @@ func (s *rest) CreatePreheat(json types.CreatePreheatRequest) (*types.Preheat, e
 		hostnames = append(hostnames, scheduler.HostName)
 	}
 
-	return s.tasks.CreatePreheat(hostnames, json)
+	return s.job.CreatePreheat(hostnames, json)
 }
 
 func (s *rest) GetPreheat(id string) (*types.Preheat, error) {
-	return s.tasks.GetPreheat(id)
+	return s.job.GetPreheat(id)
 }

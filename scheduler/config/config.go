@@ -34,7 +34,7 @@ type Config struct {
 	DynConfig    *DynConfig       `yaml:"dynConfig" mapstructure:"dynConfig"`
 	Manager      *ManagerConfig   `yaml:"manager" mapstructure:"manager"`
 	Host         *HostConfig      `yaml:"host" mapstructure:"host"`
-	Task         *TaskConfig      `yaml:"task" mapstructure:"task"`
+	Job          *JobConfig       `yaml:"job" mapstructure:"job"`
 }
 
 func New() *Config {
@@ -44,7 +44,7 @@ func New() *Config {
 		DynConfig: NewDefaultDynConfig(),
 		Manager:   NewDefaultManagerConfig(),
 		Host:      NewHostConfig(),
-		Task:      NewDefaultTaskConfig(),
+		Job:       NewDefaultJobConfig(),
 	}
 }
 
@@ -70,6 +70,10 @@ func (c *Config) Validate() error {
 		if c.Manager.Addr == "" {
 			return errors.New("dynconfig is ManagerSourceType type requires parameter manager addr")
 		}
+
+		if c.Manager.SchedulerClusterID == 0 {
+			return errors.New("dynconfig is ManagerSourceType type requires parameter manager schedulerClusterID")
+		}
 	}
 
 	return nil
@@ -78,7 +82,7 @@ func (c *Config) Validate() error {
 func NewDefaultDynConfig() *DynConfig {
 	return &DynConfig{
 		Type:       dc.LocalSourceType,
-		ExpireTime: 60000 * 1000 * 1000,
+		ExpireTime: 30 * time.Second,
 		CDNDirPath: "",
 		Data: &DynconfigData{
 			CDNs: []*CDN{
@@ -100,6 +104,7 @@ func NewDefaultDynConfig() *DynConfig {
 func NewDefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
 		IP:   iputils.HostIP,
+		Host: iputils.HostName,
 		Port: 8002,
 	}
 }
@@ -111,6 +116,7 @@ func NewDefaultSchedulerConfig() *SchedulerConfig {
 		AScheduler:           "",
 		BScheduler:           "",
 		WorkerNum:            runtime.GOMAXPROCS(0),
+		BackSourceCount:      3,
 		AccessWindow:         3 * time.Minute,
 		CandidateParentCount: 10,
 		Scheduler:            "basic",
@@ -125,8 +131,10 @@ func NewDefaultGCConfig() *GCConfig {
 	return &GCConfig{
 		PeerGCInterval: 5 * time.Minute,
 		TaskGCInterval: 5 * time.Minute,
-		PeerTTL:        5 * time.Minute,
-		TaskTTL:        1 * time.Hour,
+		PeerTTL:        10 * time.Minute,
+		PeerTTI:        3 * time.Minute,
+		TaskTTL:        10 * time.Minute,
+		TaskTTI:        3 * time.Minute,
 	}
 }
 
@@ -143,8 +151,8 @@ func NewDefaultManagerConfig() *ManagerConfig {
 	}
 }
 
-func NewDefaultTaskConfig() *TaskConfig {
-	return &TaskConfig{
+func NewDefaultJobConfig() *JobConfig {
+	return &JobConfig{
 		GlobalWorkerNum:    10,
 		SchedulerWorkerNum: 10,
 		LocalWorkerNum:     10,
@@ -159,12 +167,12 @@ func NewDefaultTaskConfig() *TaskConfig {
 }
 
 func (c *Config) Convert() error {
-	if c.Manager.Addr != "" && c.Task.Redis.Host == "" {
+	if c.Manager.Addr != "" && c.Job.Redis.Host == "" {
 		host, _, err := net.SplitHostPort(c.Manager.Addr)
 		if err != nil {
 			return err
 		}
-		c.Task.Redis.Host = host
+		c.Job.Redis.Host = host
 	}
 	return nil
 }
@@ -174,7 +182,7 @@ type ManagerConfig struct {
 	Addr string `yaml:"addr" mapstructure:"addr"`
 
 	// SchedulerClusterID is scheduler cluster id.
-	SchedulerClusterID uint64 `yaml:"schedulerClusterID" mapstructure:"schedulerClusterID"`
+	SchedulerClusterID uint `yaml:"schedulerClusterID" mapstructure:"schedulerClusterID"`
 
 	// KeepAlive configuration
 	KeepAlive KeepAliveConfig `yaml:"keepAlive" mapstructure:"keepAlive"`
@@ -209,31 +217,35 @@ type DynConfig struct {
 }
 
 type SchedulerConfig struct {
-	DisableCDN bool   `yaml:"disableCDN" mapstructure:"disableCDN"`
-	ABTest     bool   `yaml:"abtest" mapstructure:"abtest"`
-	AScheduler string `yaml:"ascheduler" mapstructure:"ascheduler"`
-	BScheduler string `yaml:"bscheduler" mapstructure:"bscheduler"`
-	WorkerNum  int    `yaml:"workerNum" mapstructure:"workerNum"`
+	DisableCDN      bool   `yaml:"disableCDN" mapstructure:"disableCDN"`
+	ABTest          bool   `yaml:"abtest" mapstructure:"abtest"`
+	AScheduler      string `yaml:"ascheduler" mapstructure:"ascheduler"`
+	BScheduler      string `yaml:"bscheduler" mapstructure:"bscheduler"`
+	WorkerNum       int    `yaml:"workerNum" mapstructure:"workerNum"`
+	BackSourceCount int    `yaml:"backSourceCount" mapstructure:"backSourceCount"`
 	// AccessWindow should less than CDN task expireTime
 	AccessWindow         time.Duration `yaml:"accessWindow" mapstructure:"accessWindow"`
 	CandidateParentCount int           `yaml:"candidateParentCount" mapstructure:"candidateParentCount"`
 	Scheduler            string        `yaml:"scheduler" mapstructure:"scheduler"`
-	CDNLoad              int           `yaml:"cDNLoad" mapstructure:"cDNLoad"`
-	ClientLoad           int           `yaml:"clientLoad" mapstructure:"clientLoad"`
+	CDNLoad              int           `yaml:"cdnLoad" mapstructure:"cdnLoad"`
+	ClientLoad           int32         `yaml:"clientLoad" mapstructure:"clientLoad"`
 	OpenMonitor          bool          `yaml:"openMonitor" mapstructure:"openMonitor"`
 	GC                   *GCConfig     `yaml:"gc" mapstructure:"gc"`
 }
 
 type ServerConfig struct {
 	IP   string `yaml:"ip" mapstructure:"ip"`
+	Host string `yaml:"host" mapstructure:"host"`
 	Port int    `yaml:"port" mapstructure:"port"`
 }
 
 type GCConfig struct {
 	PeerGCInterval time.Duration `yaml:"peerGCInterval" mapstructure:"peerGCInterval"`
+	PeerTTL        time.Duration `yaml:"peerTTL" mapstructure:"peerTTL"`
+	PeerTTI        time.Duration `yaml:"peerTTI" mapstructure:"peerTTI"`
 	TaskGCInterval time.Duration `yaml:"taskGCInterval" mapstructure:"taskGCInterval"`
-	PeerTTL        time.Duration
-	TaskTTL        time.Duration
+	TaskTTL        time.Duration `yaml:"taskTTL" mapstructure:"taskTTL"`
+	TaskTTI        time.Duration `yaml:"taskTTI" mapstructure:"taskTTI"`
 }
 
 type HostConfig struct {
@@ -252,7 +264,7 @@ type RedisConfig struct {
 	BackendDB int    `yaml:"backendDB" mapstructure:"backendDB"`
 }
 
-type TaskConfig struct {
+type JobConfig struct {
 	GlobalWorkerNum    uint         `yaml:"globalWorkerNum" mapstructure:"globalWorkerNum"`
 	SchedulerWorkerNum uint         `yaml:"schedulerWorkerNum" mapstructure:"schedulerWorkerNum"`
 	LocalWorkerNum     uint         `yaml:"localWorkerNum" mapstructure:"localWorkerNum"`

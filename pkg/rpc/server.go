@@ -29,8 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
@@ -77,13 +75,8 @@ var serverOpts = []grpc.ServerOption{
 		MaxConnectionIdle: 5 * time.Minute,
 	}),
 	grpc.MaxConcurrentStreams(100),
-	// TODO make grpc interceptor optional
-	grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(
-		otelgrpc.StreamServerInterceptor(),
-		streamServerInterceptor)),
-	grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-		otelgrpc.UnaryServerInterceptor(),
-		unaryServerInterceptor)),
+	grpc.StreamInterceptor(streamServerInterceptor),
+	grpc.UnaryInterceptor(unaryServerInterceptor),
 }
 
 var sp = struct {

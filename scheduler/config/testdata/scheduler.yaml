@@ -14,6 +14,7 @@ scheduler:
 
 server:
   ip: "127.0.0.1"
+  host: "foo"
   port: 8002
 
 cdn:
@@ -40,7 +41,7 @@ host:
   idc: foo
   location: bar
 
-task:
+job:
   globalWorkerNum: 1
   schedulerWorkerNum: 1
   localWorkerNum: 5

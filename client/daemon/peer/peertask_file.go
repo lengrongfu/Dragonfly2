@@ -88,14 +88,14 @@ func newFilePeerTask(ctx context.Context,
 	logger.Infof("request overview, url: %s, filter: %s, meta: %s, biz: %s, peer: %s", request.Url, request.UrlMeta.Filter, request.UrlMeta, request.UrlMeta.Tag, request.PeerId)
 	// trace register
 	regCtx, regSpan := tracer.Start(ctx, config.SpanRegisterTask)
-	result, err := schedulerClient.RegisterPeerTask(regCtx, request)
 	logger.Infof("step 1: peer %s start to register", request.PeerId)
+	result, err := schedulerClient.RegisterPeerTask(regCtx, request)
 	regSpan.RecordError(err)
 	regSpan.End()
 
 	var needBackSource bool
 	if err != nil {
-		logger.Errorf("step 1: peer %s register failed: err", request.PeerId, err)
+		logger.Errorf("step 1: peer %s register failed: %v", request.PeerId, err)
 		if schedulerOption.DisableAutoBackSource {
 			logger.Errorf("register peer task failed: %s, peer id: %s, auto back source disabled", err, request.PeerId)
 			span.RecordError(err)
@@ -148,9 +148,8 @@ func newFilePeerTask(ctx context.Context,
 			logger.Infof("%s/%s size scope: normal", result.TaskId, request.PeerId)
 		}
 	}
-
-	peerPacketStream, err := schedulerClient.ReportPieceResult(ctx, result.TaskId, request)
 	logger.Infof("step 2: start report peer %s piece result", request.PeerId)
+	peerPacketStream, err := schedulerClient.ReportPieceResult(ctx, result.TaskId, request)
 	if err != nil {
 		logger.Errorf("step 2: peer %s report piece failed: err", request.PeerId, err)
 		defer span.End()
@@ -217,38 +216,38 @@ func (pt *filePeerTask) Start(ctx context.Context) (chan *FilePeerTaskProgress, 
 	return pt.progressCh, nil
 }
 
-func (pt *filePeerTask) ReportPieceResult(piece *base.PieceInfo, pieceResult *scheduler.PieceResult) error {
+func (pt *filePeerTask) ReportPieceResult(result *pieceTaskResult) error {
 	// goroutine safe for channel and send on closed channel
 	defer pt.recoverFromPanic()
-	pt.Debugf("report piece %d result, success: %t", piece.PieceNum, pieceResult.Success)
+	pt.Debugf("report piece %d result, success: %t", result.piece.PieceNum, result.pieceResult.Success)
 
 	// retry failed piece
-	if !pieceResult.Success {
-		pieceResult.FinishedCount = pt.readyPieces.Settled()
-		_ = pt.peerPacketStream.Send(pieceResult)
-		pt.failedPieceCh <- pieceResult.PieceNum
-		pt.Errorf("%d download failed, retry later", piece.PieceNum)
+	if !result.pieceResult.Success {
+		result.pieceResult.FinishedCount = pt.readyPieces.Settled()
+		_ = pt.peerPacketStream.Send(result.pieceResult)
+		pt.failedPieceCh <- result.pieceResult.PieceNum
+		pt.Errorf("%d download failed, retry later", result.piece.PieceNum)
 		return nil
 	}
 
 	pt.lock.Lock()
-	if pt.readyPieces.IsSet(pieceResult.PieceNum) {
+	if pt.readyPieces.IsSet(result.pieceResult.PieceNum) {
 		pt.lock.Unlock()
-		pt.Warnf("piece %d is already reported, skipped", pieceResult.PieceNum)
+		pt.Warnf("piece %d is already reported, skipped", result.pieceResult.PieceNum)
 		return nil
 	}
 	// mark piece processed
-	pt.readyPieces.Set(pieceResult.PieceNum)
-	pt.completedLength.Add(int64(piece.RangeSize))
+	pt.readyPieces.Set(result.pieceResult.PieceNum)
+	pt.completedLength.Add(int64(result.piece.RangeSize))
 	pt.lock.Unlock()
 
-	pieceResult.FinishedCount = pt.readyPieces.Settled()
-	_ = pt.peerPacketStream.Send(pieceResult)
+	result.pieceResult.FinishedCount = pt.readyPieces.Settled()
+	_ = pt.peerPacketStream.Send(result.pieceResult)
 	// send progress first to avoid close channel panic
 	p := &FilePeerTaskProgress{
 		State: &ProgressState{
-			Success: pieceResult.Success,
-			Code:    pieceResult.Code,
+			Success: result.pieceResult.Success,
+			Code:    result.pieceResult.Code,
 			Msg:     "downloading",
 		},
 		TaskID:          pt.taskID,

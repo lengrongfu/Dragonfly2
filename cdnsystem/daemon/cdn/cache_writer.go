@@ -19,8 +19,11 @@ package cdn
 import (
 	"bytes"
 	"crypto/md5"
+	"d7y.io/dragonfly/v2/cdnsystem/dynamic"
+	"d7y.io/dragonfly/v2/pkg/compression"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"sync"
 
 	"d7y.io/dragonfly/v2/cdnsystem/config"
@@ -99,16 +102,18 @@ func (cw *cacheWriter) doWrite(reader io.Reader, task *types.SeedTask, routineCo
 	}
 	var backSourceFileLength int64
 	buf := make([]byte, 256*1024)
-	jobCh := make(chan *piece)
+	pieceCh := make(chan *piece)
 	var wg = &sync.WaitGroup{}
-	cw.writerPool(wg, routineCount, jobCh, bufPool)
+	cw.writerPool(wg, routineCount, pieceCh, bufPool, task)
+	// record send detect compress data
+	var sendNum int
 	for {
 		var bb = bufPool.Get().(*bytes.Buffer)
 		bb.Reset()
 		limitReader := io.LimitReader(reader, int64(task.PieceSize))
 		n, err := io.CopyBuffer(bb, limitReader, buf)
 		if err != nil {
-			close(jobCh)
+			close(pieceCh)
 			return backSourceFileLength, 0, fmt.Errorf("read source taskID %s pieceNum %d piece: %v", task.TaskID, curPieceNum, err)
 		}
 		if n == 0 {
@@ -116,23 +121,38 @@ func (cw *cacheWriter) doWrite(reader io.Reader, task *types.SeedTask, routineCo
 		}
 		backSourceFileLength = backSourceFileLength + n
 
-		jobCh <- &piece{
+		// send detect compress data
+		var pieceContent *bytes.Buffer
+		if task.PieceTotal < dynamic.DefaultMinPiecesNum &&
+			sendNum < dynamic.DefaultDetectPiecesNum {
+			reader := io.TeeReader(bb, pieceContent)
+			data, err := ioutil.ReadAll(reader)
+			if err == nil {
+				compressData := dynamic.NewCompressData(task.TaskID, &data)
+				dynamic.DefaultCompress.Send(compressData)
+				sendNum++
+			}
+		} else {
+			pieceContent = bb
+		}
+
+		pieceCh <- &piece{
 			taskID:       task.TaskID,
 			pieceNum:     int32(curPieceNum),
 			pieceSize:    task.PieceSize,
-			pieceContent: bb,
+			pieceContent: pieceContent,
 		}
 		curPieceNum++
 		if n < int64(task.PieceSize) {
 			break
 		}
 	}
-	close(jobCh)
+	close(pieceCh)
 	wg.Wait()
 	return backSourceFileLength, curPieceNum, nil
 }
 
-func (cw *cacheWriter) writerPool(wg *sync.WaitGroup, routineCount int, pieceCh chan *piece, bufPool *sync.Pool) {
+func (cw *cacheWriter) writerPool(wg *sync.WaitGroup, routineCount int, pieceCh chan *piece, bufPool *sync.Pool, task *types.SeedTask) {
 	wg.Add(routineCount)
 	for i := 0; i < routineCount; i++ {
 		go func() {
@@ -152,6 +172,12 @@ func (cw *cacheWriter) writerPool(wg *sync.WaitGroup, routineCount int, pieceCh 
 					logger.Errorf("write taskID %s pieceNum %d file: %v", piece.taskID, piece.pieceNum, err)
 					continue
 				}
+
+				raw := storage.GetDownloadRaw(piece.taskID)
+				var compressAlgorithm compression.CompressAlgorithm
+				if dynamic.DefaultCompress.IsCompress(raw.Key) {
+					compressAlgorithm = dynamic.DefaultCompress.CompressAlgorithm()
+				}
 				pieceRecord := &storage.PieceMetaRecord{
 					PieceNum: piece.pieceNum,
 					PieceLen: int32(pieceLen),
@@ -164,7 +190,8 @@ func (cw *cacheWriter) writerPool(wg *sync.WaitGroup, routineCount int, pieceCh 
 						StartIndex: uint64(piece.pieceNum * piece.pieceSize),
 						EndIndex:   uint64(piece.pieceNum*piece.pieceSize + int32(originPieceLen) - 1),
 					},
-					PieceStyle: pieceStyle,
+					PieceStyle:        pieceStyle,
+					CompressAlgorithm: compressAlgorithm,
 				}
 				// write piece meta to storage
 				if err := cw.cacheDataManager.appendPieceMetaData(piece.taskID, pieceRecord); err != nil {

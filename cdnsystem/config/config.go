@@ -17,6 +17,7 @@
 package config
 
 import (
+	"runtime"
 	"time"
 
 	"d7y.io/dragonfly/v2/cdnsystem/daemon/cdn/storage"
@@ -26,6 +27,7 @@ import (
 	"d7y.io/dragonfly/v2/cdnsystem/storedriver"
 	"d7y.io/dragonfly/v2/cdnsystem/storedriver/local"
 	"d7y.io/dragonfly/v2/cmd/dependency/base"
+	"d7y.io/dragonfly/v2/pkg/compression"
 	"d7y.io/dragonfly/v2/pkg/unit"
 	"d7y.io/dragonfly/v2/pkg/util/net/iputils"
 	"gopkg.in/yaml.v3"
@@ -140,6 +142,12 @@ func NewDefaultBaseProperties() *BaseProperties {
 			},
 		},
 		Host: HostConfig{},
+		Compress: CompressConfig{
+			Ratio:          DefaultCompressRatio,
+			Algorithm:      DefaultCompressAlgorithm,
+			DetectChanSize: DefaultDetectQueueSize,
+			ConcurrentSize: runtime.NumCPU(),
+		},
 	}
 }
 
@@ -192,6 +200,9 @@ type BaseProperties struct {
 
 	// Host configuration
 	Host HostConfig `yaml:"host" mapstructure:"host"`
+
+	// Compress CDN compress configuration
+	Compress CompressConfig `yaml:"compress" mapstructure:"compress"`
 }
 
 type ManagerConfig struct {
@@ -225,4 +236,18 @@ type HostConfig struct {
 
 	// Peerhost idc for scheduler
 	IDC string `mapstructure:"idc" yaml:"idc"`
+}
+
+type CompressConfig struct {
+	// Ratio Compress ratio
+	Ratio float32 `yaml:"ratio" mapstructure:"ratio"`
+
+	// Algorithm compress type
+	Algorithm compression.CompressAlgorithm `yaml:"algorithm" mapstructure:"algorithm"`
+
+	// DetectChanSize
+	DetectChanSize int `yaml:"detectChanSize" mapstructure:"detectChanSize"`
+
+	// ConcurrentSize compress detect goroutine size
+	ConcurrentSize int `yaml:"concurrentSize" mapstructure:"concurrentSize"`
 }

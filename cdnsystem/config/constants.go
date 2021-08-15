@@ -17,6 +17,7 @@
 package config
 
 import (
+	"d7y.io/dragonfly/v2/pkg/compression"
 	"time"
 
 	"d7y.io/dragonfly/v2/pkg/unit"
@@ -77,4 +78,10 @@ const (
 	DefaultKeepAliveRetryMaxAttempts         = 100000000
 	DefaultKeepAliveRetryInitBackOff float64 = 5
 	DefaultKeepAliveRetryMaxBackOff  float64 = 10
+)
+
+const (
+	DefaultCompressRatio     = 3
+	DefaultCompressAlgorithm = compression.GZIP
+	DefaultDetectQueueSize   = 64
 )

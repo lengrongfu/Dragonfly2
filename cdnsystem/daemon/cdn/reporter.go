@@ -70,11 +70,11 @@ func (re *reporter) reportPieceMetaRecord(taskID string, record *storage.PieceMe
 */
 func convertPieceMeta2SeedPiece(record *storage.PieceMetaRecord) *types.SeedPiece {
 	return &types.SeedPiece{
-		PieceStyle:  record.PieceStyle,
-		PieceNum:    record.PieceNum,
-		PieceMd5:    record.Md5,
-		PieceRange:  record.Range,
-		OriginRange: record.OriginRange,
-		PieceLen:    record.PieceLen,
+		PieceStyle:        record.PieceStyle,
+		PieceNum:          record.PieceNum,
+		PieceMd5:          record.Md5,
+		PieceRange:        record.Range,
+		OriginRange:       record.OriginRange,
+		PieceLen:          record.PieceLen,
 	}
 }

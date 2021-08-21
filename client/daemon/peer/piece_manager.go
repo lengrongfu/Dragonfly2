@@ -17,7 +17,10 @@
 package peer
 
 import (
+	"bytes"
 	"context"
+	"d7y.io/dragonfly/v2/cdnsystem/types"
+	"d7y.io/dragonfly/v2/pkg/compression"
 	"io"
 	"math"
 	"time"
@@ -133,6 +136,23 @@ func (pm *pieceManager) DownloadPiece(ctx context.Context, pt Task, request *Dow
 		return
 	}
 	defer c.Close()
+	// un compress
+	pieceStyle := request.piece.PieceStyle
+	var rc io.ReadCloser
+
+	algorithm := compression.PieceStyleMapCompressAlgorithm(types.PieceFormat(pieceStyle))
+	if algorithm != "" {
+		rc, err = compression.DefaultCompress.UnCompression(r, algorithm)
+		if err != nil {
+			return
+		}
+		var bf bytes.Buffer
+		io.CopyN(&bf, rc, int64(request.piece.RangeSize))
+		rc = io.NopCloser(&bf)
+	} else {
+		rc = io.NopCloser(r)
+	}
+	defer rc.Close()
 
 	// 2. save to storage
 	var n int64
@@ -150,7 +170,7 @@ func (pm *pieceManager) DownloadPiece(ctx context.Context, pt Task, request *Dow
 				Length: int64(request.piece.RangeSize),
 			},
 		},
-		Reader: r,
+		Reader: rc,
 	})
 	end = time.Now().UnixNano()
 	span.RecordError(err)

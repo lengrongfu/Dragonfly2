@@ -19,7 +19,6 @@ package cdn
 import (
 	"bytes"
 	"crypto/md5"
-	"d7y.io/dragonfly/v2/cdnsystem/dynamic"
 	"d7y.io/dragonfly/v2/pkg/compression"
 	"fmt"
 	"io"
@@ -123,13 +122,13 @@ func (cw *cacheWriter) doWrite(reader io.Reader, task *types.SeedTask, routineCo
 
 		// send detect compress data
 		var pieceContent *bytes.Buffer
-		if task.PieceTotal < dynamic.DefaultMinPiecesNum &&
-			sendNum < dynamic.DefaultDetectPiecesNum {
+		if task.PieceTotal < compression.DefaultMinPiecesNum &&
+			sendNum < compression.DefaultDetectPiecesNum {
 			reader := io.TeeReader(bb, pieceContent)
 			data, err := ioutil.ReadAll(reader)
 			if err == nil {
-				compressData := dynamic.NewCompressData(task.TaskID, &data)
-				dynamic.DefaultCompress.Send(compressData)
+				compressData := compression.NewCompressData(task.TaskID, &data)
+				compression.DefaultCompress.Send(compressData)
 				sendNum++
 			}
 		} else {
@@ -174,9 +173,13 @@ func (cw *cacheWriter) writerPool(wg *sync.WaitGroup, routineCount int, pieceCh 
 				}
 
 				raw := storage.GetDownloadRaw(piece.taskID)
-				var compressAlgorithm compression.CompressAlgorithm
-				if dynamic.DefaultCompress.IsCompress(raw.Key) {
-					compressAlgorithm = dynamic.DefaultCompress.CompressAlgorithm()
+				if compression.DefaultCompress.IsCompress(raw.Key) {
+					compressAlgorithm := compression.DefaultCompress.CompressAlgorithm()
+					style, err := compression.CompressAlgorithmMapPieceStyle(compressAlgorithm)
+					if err != nil {
+						continue
+					}
+					pieceStyle = style
 				}
 				pieceRecord := &storage.PieceMetaRecord{
 					PieceNum: piece.pieceNum,
@@ -190,8 +193,7 @@ func (cw *cacheWriter) writerPool(wg *sync.WaitGroup, routineCount int, pieceCh 
 						StartIndex: uint64(piece.pieceNum * piece.pieceSize),
 						EndIndex:   uint64(piece.pieceNum*piece.pieceSize + int32(originPieceLen) - 1),
 					},
-					PieceStyle:        pieceStyle,
-					CompressAlgorithm: compressAlgorithm,
+					PieceStyle: pieceStyle,
 				}
 				// write piece meta to storage
 				if err := cw.cacheDataManager.appendPieceMetaData(piece.taskID, pieceRecord); err != nil {

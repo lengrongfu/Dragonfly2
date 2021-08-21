@@ -19,7 +19,7 @@ package server
 
 import (
 	"context"
-	"d7y.io/dragonfly/v2/cdnsystem/dynamic"
+	"d7y.io/dragonfly/v2/pkg/compression"
 	"fmt"
 	"runtime"
 	"time"
@@ -87,13 +87,13 @@ func New(cfg *config.Config) (*Server, error) {
 		return nil, errors.Wrapf(err, "create gc manager")
 	}
 	// dynamic compress
-	compressConfig := dynamic.CompressConfig{
+	compressConfig := compression.CompressConfig{
 		Ratio:          cfg.Compress.Ratio,
 		Algorithm:      cfg.Compress.Algorithm,
 		DetectChanSize: cfg.Compress.DetectChanSize,
 		ConcurrentSize: cfg.Compress.ConcurrentSize,
 	}
-	defaultCompress := dynamic.NewDefaultCompressDetect(compressConfig)
+	defaultCompress := compression.NewDefaultCompressDetect(compressConfig)
 	defaultCompress.Run()
 
 	cdnSeedServer, err := service.NewCdnSeedServer(cfg, taskMgr)

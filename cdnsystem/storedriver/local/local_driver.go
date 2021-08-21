@@ -17,8 +17,6 @@
 package local
 
 import (
-	"d7y.io/dragonfly/v2/cdnsystem/dynamic"
-	"d7y.io/dragonfly/v2/pkg/compression/gzip"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -100,10 +98,6 @@ func (ds *driver) Get(raw *storedriver.Raw) (io.ReadCloser, error) {
 		defer unLock(path, raw.Offset, true)
 
 		f, err := os.Open(path)
-
-		gzipCompress := gzip.NewGzipCompress()
-		deCompression, err := gzipCompress.UnCompression(f)
-
 		if err != nil {
 			return
 		}
@@ -117,19 +111,10 @@ func (ds *driver) Get(raw *storedriver.Raw) (io.ReadCloser, error) {
 			logger.Errorf("seek file %s: %v", f, err)
 		}
 		var reader io.Reader
-		if 1 == 1 {
-			// 解压
-			reader = deCompression
-			if raw.Length > 0 {
-				reader = io.LimitReader(deCompression, raw.Length)
-			}
-		} else {
-			reader = f
-			if raw.Length > 0 {
-				reader = io.LimitReader(f, raw.Length)
-			}
+		reader = f
+		if raw.Length > 0 {
+			reader = io.LimitReader(f, raw.Length)
 		}
-
 		buf := make([]byte, 256*1024)
 		if _, err := io.CopyBuffer(w, reader, buf); err != nil {
 			logger.Errorf("copy buffer from file %s: %v", f, err)
@@ -212,6 +197,11 @@ func (ds *driver) Put(raw *storedriver.Raw, data io.Reader) error {
 			return err
 		}
 	}
+	defer func() {
+		if err := f.Close(); err != nil {
+			logger.Errorf("failed to close file %s: %v", f, err)
+		}
+	}()
 	if raw.Trunc {
 		if err = f.Truncate(raw.TruncSize); err != nil {
 			return err
@@ -220,34 +210,15 @@ func (ds *driver) Put(raw *storedriver.Raw, data io.Reader) error {
 	if _, err := f.Seek(raw.Offset, io.SeekStart); err != nil {
 		return err
 	}
-
-	// compress write
-	var dst io.WriteCloser
-	isCompress := dynamic.DefaultCompress.IsCompress(raw.Key)
-	if isCompress {
-		dst, err = dynamic.DefaultCompress.Compression(f)
-		if err != nil {
-			return err
-		}
-	} else {
-		dst = f
-	}
-	// close dst
-	defer func() {
-		if err := dst.Close(); err != nil {
-			logger.Errorf("failed to close file %s: %v", f, err)
-		}
-	}()
-
 	if raw.Length > 0 {
-		if _, err = io.CopyN(dst, data, raw.Length); err != nil {
+		if _, err = io.CopyN(f, data, raw.Length); err != nil {
 			return err
 		}
 		return nil
 	}
 
 	buf := make([]byte, 256*1024)
-	if _, err = io.CopyBuffer(dst, data, buf); err != nil {
+	if _, err = io.CopyBuffer(f, data, buf); err != nil {
 		return err
 	}
 

@@ -17,6 +17,8 @@
 package disk
 
 import (
+	"bytes"
+	"d7y.io/dragonfly/v2/pkg/compression"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -154,6 +156,20 @@ func (s *diskStorageMgr) WriteDownloadFile(taskID string, offset int64, len int6
 	raw := storage.GetDownloadRaw(taskID)
 	raw.Offset = offset
 	raw.Length = len
+	isCompress := compression.DefaultCompress.IsCompress(taskID)
+	if isCompress {
+		var bf bytes.Buffer
+		writeCloser, err := compression.DefaultCompress.Compression(&bf)
+		if err != nil {
+			return err
+		}
+		_, err = io.CopyN(writeCloser, data, offset)
+		if err != nil {
+			return err
+		}
+		writeCloser.Close()
+		return s.diskDriver.Put(raw, &bf)
+	}
 	return s.diskDriver.Put(raw, data)
 }
 

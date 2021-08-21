@@ -26,6 +26,11 @@ enum Code{
 
 enum PieceStyle{
   PLAIN = 0;
+
+  // Compress Algorithm Code Start 10,end 20
+  GZIP = 10;
+
+
 }
 
 enum SizeScope{

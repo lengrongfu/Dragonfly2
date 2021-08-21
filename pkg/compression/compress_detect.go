@@ -1,10 +1,8 @@
-package dynamic
+package compression
 
 import (
-	"d7y.io/dragonfly/v2/cdnsystem/daemon/cdn/storage"
 	logger "d7y.io/dragonfly/v2/internal/dflog"
 	"d7y.io/dragonfly/v2/pkg/cache"
-	"d7y.io/dragonfly/v2/pkg/compression"
 	"d7y.io/dragonfly/v2/pkg/synclock"
 	"fmt"
 	"github.com/pkg/errors"
@@ -30,7 +28,7 @@ type CompressConfig struct {
 	Ratio float32 `yaml:"ratio" mapstructure:"ratio"`
 
 	// Algorithm compress type
-	Algorithm compression.CompressAlgorithm `yaml:"algorithm" mapstructure:"algorithm"`
+	Algorithm CompressAlgorithm `yaml:"algorithm" mapstructure:"algorithm"`
 
 	// DetectChanSize
 	DetectChanSize int `yaml:"detectChanSize" mapstructure:"detectChanSize"`
@@ -43,8 +41,8 @@ type CompressDetect struct {
 	dataCh                 chan CompressData
 	config                 CompressConfig
 	detectResult           cache.Cache
-	compressMap            map[compression.CompressAlgorithm]compression.Compress
-	compress               compression.Compress
+	compressMap            map[CompressAlgorithm]Compress
+	compress               Compress
 	concurrentSize         int
 	recordDetectNumPerTask cache.Cache
 }
@@ -55,8 +53,8 @@ type CompressData struct {
 }
 
 func NewDefaultCompressDetect(compressConfig CompressConfig) *CompressDetect {
-	compress := compression.NewCompress(compressConfig.Algorithm)
-	compressMap := make(map[compression.CompressAlgorithm]compression.Compress)
+	compress := NewCompress(compressConfig.Algorithm)
+	compressMap := make(map[CompressAlgorithm]Compress)
 	compressMap[compressConfig.Algorithm] = compress
 	DefaultCompress = &CompressDetect{
 		dataCh:                 make(chan CompressData, compressConfig.DetectChanSize),
@@ -81,7 +79,7 @@ func (cd *CompressDetect) Send(data CompressData) {
 	cd.dataCh <- data
 }
 
-func (cd *CompressDetect) CompressAlgorithm() compression.CompressAlgorithm {
+func (cd *CompressDetect) CompressAlgorithm() CompressAlgorithm {
 	return cd.config.Algorithm
 }
 
@@ -91,12 +89,12 @@ func (cd *CompressDetect) IsCompress(Key string) bool {
 }
 
 // UnCompression decode compression data
-func (cd *CompressDetect) UnCompression(reader io.Reader, algorithm compression.CompressAlgorithm) (io.ReadCloser, error) {
-	var compressAlgorithmInstance compression.Compress
+func (cd *CompressDetect) UnCompression(reader io.Reader, algorithm CompressAlgorithm) (io.ReadCloser, error) {
+	var compressAlgorithmInstance Compress
 	if algorithm != "" {
 		synclock.Lock(string(algorithm), true)
 		if compressAlgorithm, ok := cd.compressMap[algorithm]; !ok {
-			compressAlgorithmInstance = compression.NewCompress(algorithm)
+			compressAlgorithmInstance = NewCompress(algorithm)
 			synclock.UnLock(string(algorithm), true)
 
 			synclock.Lock(string(algorithm), false)
@@ -161,12 +159,11 @@ func (cd *CompressDetect) Run() {
 							}
 						}
 						lockerPool.Lock(data.taskID, false)
-						raw := storage.GetDownloadRaw(data.taskID)
 						if allQualifiedRatio {
-							cd.detectResult.SetDefault(raw.Key, true)
+							cd.detectResult.SetDefault(data.taskID, true)
 							logger.Infof("task %s compress detect is true", data.taskID)
 						} else {
-							cd.detectResult.SetDefault(raw.Key, false)
+							cd.detectResult.SetDefault(data.taskID, false)
 							logger.Infof("task %s compress detect is false", data.taskID)
 						}
 						lockerPool.UnLock(data.taskID, false)

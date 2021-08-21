@@ -404,7 +404,7 @@ loop:
 		default:
 		}
 
-		// 2, try to get pieces
+		// 2, try to get pieces meta
 		pt.Debugf("try to get pieces, number: %d, limit: %d", num, limit)
 		piecePacket, err := pt.preparePieceTasks(
 			&base.PieceTaskRequest{

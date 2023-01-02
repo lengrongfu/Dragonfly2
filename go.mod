@@ -9,7 +9,7 @@ require (
 	github.com/VividCortex/mysqlerr v1.0.0
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.4+incompatible
 	github.com/appleboy/gin-jwt/v2 v2.8.0
-	github.com/aws/aws-sdk-go v1.44.44
+	github.com/aws/aws-sdk-go v1.44.171
 	github.com/bits-and-blooms/bitset v1.2.2
 	github.com/casbin/casbin/v2 v2.51.2
 	github.com/casbin/gorm-adapter/v3 v3.5.0
@@ -69,7 +69,7 @@ require (
 	golang.org/x/exp v0.0.0-20220613132600-b0d781184e0d
 	golang.org/x/oauth2 v0.0.0-20220628200809-02e64fa58f26
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
-	golang.org/x/sys v0.0.0-20220803195053-6e608f9ce704
+	golang.org/x/sys v0.1.0
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858
 	google.golang.org/api v0.90.0
 	google.golang.org/grpc v1.48.0
@@ -197,9 +197,9 @@ require (
 	go.mongodb.org/mongo-driver v1.9.1 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	golang.org/x/net v0.0.0-20220802222814-0bcc04d9c69b // indirect
-	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467 // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/net v0.1.0 // indirect
+	golang.org/x/term v0.1.0 // indirect
+	golang.org/x/text v0.4.0 // indirect
 	golang.org/x/tools v0.1.12 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20220728213248-dd149ef739b9 // indirect
